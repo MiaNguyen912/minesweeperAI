@@ -33,14 +33,15 @@ class MyAI(AI):
         self.__totalMines = totalMines
         self.__startX = startX   # the inital tile at (__startX, __startY) is guaranteed to be safe (0 mines around)
         self.__startY = startY
-        self.__flagRemaining = totalMines
-        self.__tilesCovered = ( rowDimension * colDimension - 1 )  # number of covered tiles (including flagged tiles)
-        self.__tilesRemaining = ( rowDimension * colDimension - 1 )  # number of covered tiles (not including flagged tiles)
-        self.__frontier = set() # set of tuples (use set to disallow duplication)
-        self.__tilesToUncover = set()
-        self.__previouslyUncoveredTile = (startX, startY)
+        self.__numFlagRemaining = totalMines
+        self.__numTilesCovered = ( rowDimension * colDimension)  # number of covered tiles (including flagged tiles)
+        self.__numTilesRemaining = ( rowDimension * colDimension)  # number of covered tiles (not including flagged tiles)
+        self.__frontier_covered = set() # list of tiles to be uncovered
+        self.__frontier_uncovered = set() # list of uncovered tiles, waiting for their surrounding tiles to be added to the frontier
+        self.__currentTile = (startX, startY)
+        self.__effectiveLabelArray = [[-1 for _ in range(colDimension)] for _ in range(rowDimension)]
 
-        # create Effective label array:
+        # Effective label array:
         # - covered tiles: -1
         # - uncovered tiles: number of mines around them - number of flags around them
         # - flagged tiles: - 99
@@ -53,55 +54,78 @@ class MyAI(AI):
         # 							[-1, -1, -1, -1, -1],
         # 							[-1, -1, -1, -1, -1],
         # 						  ]
-        self.__effectiveLabelArray = [[-1 for _ in range(colDimension)] for _ in range(rowDimension)]
-        self.__effectiveLabelArray[startX][startY] = 0
-        print(self.__effectiveLabelArray)
+
+
+
+
 
     def getAction(self, number: int) -> "Action Object":
-        print("percept number: ", number)
-        if number == 0:
-            self.__frontier.add(self.__previouslyUncoveredTile)
-
         ########################################################################
         # 							YOUR CODE BEGINS						   #
         ########################################################################
-
-        # action = AI.Action.LEAVE
-        # action = AI.Action.UNFLAG
-        # action = AI.Action.FLAG
-        # action = AI.Action.UNCOVER
-
-        # if done solving the world, leave
-        if self.__tilesCovered == self.__totalMines:
-            return Action(AI.Action.LEAVE)
         
-        if len(self.__frontier) == 0:
+		# update __frontier_uncovered:
+        self.__frontier_uncovered.add(self.__currentTile)
+        
+        # update __numTilesCovered, __numTilesRemaining
+        self.__numTilesCovered -= 1
+        self.__numTilesRemaining -= 1
+        
+		# update __effectiveLabelArray:
+        current_x, current_y = self.__currentTile
+        numFlagsAround = 0
+        for i in range(current_x - 1, min(current_x + 1 + 1, self.__rowDimension)):
+                for j in range(current_y - 1, min(current_y + 1 + 1, self.__colDimension)):
+                    if self.__effectiveLabelArray[i][j] == -99:
+                       numFlagsAround += 1
+        self.__effectiveLabelArray[current_x][current_y] = number - numFlagsAround
+        
+		
+		
+        
+		 # if done solving the world, leave
+        if self.__numTilesCovered == self.__totalMines:
             return Action(AI.Action.LEAVE)
+
+        
+		# if current tile has no bombs around, add all covered tiles around it into __frontier_covered
+        if number == 0:
+            for i in range(current_x - 1, min(current_x + 1 + 1, self.__rowDimension)):
+                for j in range(current_y - 1, min(current_y + 1 + 1, self.__colDimension)):
+                    if self.__effectiveLabelArray[i][j] == -1:     # -1 means the tile has not been uncovered
+                        self.__frontier_covered.add((i, j))
+                        
+						
+        # print status
+        print("\n\n")
+        for row in self.__effectiveLabelArray:
+            print(row)
+        print("__frontier_uncovered: ", self.__frontier_uncovered)
+        print("__frontier_covered: ", self.__frontier_covered)
+        
 
         # if there are tiles waiting to be uncovered, uncover them
-        print("frontier: ", self.__frontier)
-        print("tiles to uncover: ", self.__tilesToUncover)
-        if len(self.__tilesToUncover) > 0:
-            print("pop __tilesToUncover")
-            x, y = self.__tilesToUncover.pop()
-            self.__previouslyUncoveredTile = (x,y)
-            return Action(AI.Action.UNCOVER, x, y)
+       
+        if len(self.__frontier_covered) > 0:
+            # print("pop __tilesToUncover")
+            next_x, next_y = self.__frontier_covered.pop()
+            self.__currentTile = (next_x, next_y)
+            return Action(AI.Action.UNCOVER, next_x, next_y)
 
-        # scan the frontier
-        if len(self.__frontier) > 0:
-            print("pop __frontier")
-            processedTile = self.__frontier.pop()
-            processedTile_X, processedTile_Y = processedTile
+        # scan the __frontier_uncovered
+        if len(self.__frontier_uncovered) > 0:
+            # print("pop __frontier")
+            current_x, current_y = self.__frontier_uncovered.pop()
 
             
-            for i in range(processedTile_X - 1, min(processedTile_X + 1 + 1, self.__rowDimension)):
-                for j in range(processedTile_Y - 1, min(processedTile_Y + 1 + 1, self.__colDimension)):
+            for i in range(current_x - 1, min(current_x + 1 + 1, self.__rowDimension)):
+                for j in range(current_y - 1, min(current_y + 1 + 1, self.__colDimension)):
                     if self.__effectiveLabelArray[i][j] == -1:
-                        self.__tilesToUncover.add((i, j))
-            print("tiles to uncover: ", self.__tilesToUncover)
+                        self.__frontier_covered.add((i, j))
+                        
 
                             
-        nextTile_x, nextTile_y = self.__tilesToUncover.pop()
-        self.__previouslyUncoveredTile = (nextTile_x, nextTile_y)
+        nextTile_x, nextTile_y = self.__frontier_covered.pop()
+        self.__currentTile = (nextTile_x, nextTile_y)
         return Action(AI.Action.UNCOVER, nextTile_x, nextTile_y)
 
