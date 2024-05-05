@@ -44,11 +44,11 @@ class MyAI(AI):
         # Effective label array:
         # - covered tiles: -1
         # - uncovered tiles: number of mines around them - number of flags around them
-        # - flagged tiles: - 99
+        # - flagged tiles: -9
 
         # EXAMPLE:
         # __effectiveLabelArray = [
-        # 							[-1, -1, -1, 0, -99],
+        # 							[-1, -1, -1, 0, -9],
         # 							[-1, -1, -1, -1, -1],
         # 							[-1, -1, -1, -1, -1],
         # 							[-1, -1, -1, -1, -1],
@@ -74,9 +74,9 @@ class MyAI(AI):
 		# update __effectiveLabelArray:
         current_x, current_y = self.__currentTile
         numFlagsAround = 0
-        for i in range(current_x - 1, min(current_x + 1 + 1, self.__rowDimension)):
-                for j in range(current_y - 1, min(current_y + 1 + 1, self.__colDimension)):
-                    if self.__effectiveLabelArray[i][j] == -99:
+        for i in range(max(0, current_x - 1), min(current_x + 1 + 1, self.__rowDimension)):
+                for j in range(max(0, current_y - 1), min(current_y + 1 + 1, self.__colDimension)):
+                    if self.__effectiveLabelArray[i][j] == -9:
                        numFlagsAround += 1
         self.__effectiveLabelArray[current_x][current_y] = number - numFlagsAround
         
@@ -90,12 +90,12 @@ class MyAI(AI):
         
 		# if current tile has no bombs around, add all covered tiles around it into __frontier_covered
         if number == 0:
-            for i in range(current_x - 1, min(current_x + 1 + 1, self.__rowDimension)):
-                for j in range(current_y - 1, min(current_y + 1 + 1, self.__colDimension)):
+            for i in range(max(0,current_x - 1), min(current_x + 1 + 1, self.__rowDimension)):
+                for j in range(max(0,current_y - 1), min(current_y + 1 + 1, self.__colDimension)):
                     if self.__effectiveLabelArray[i][j] == -1:     # -1 means the tile has not been uncovered
                         self.__frontier_covered.add((i, j))
                         
-						
+
         # print status
         print("\n\n")
         for row in self.__effectiveLabelArray:
@@ -113,13 +113,13 @@ class MyAI(AI):
             return Action(AI.Action.UNCOVER, next_x, next_y)
 
         # scan the __frontier_uncovered
-        if len(self.__frontier_uncovered) > 0:
-            # print("pop __frontier")
+        while len(self.__frontier_uncovered) > 0:
+            # print("pop __frontier_uncovered")
             current_x, current_y = self.__frontier_uncovered.pop()
 
             
-            for i in range(current_x - 1, min(current_x + 1 + 1, self.__rowDimension)):
-                for j in range(current_y - 1, min(current_y + 1 + 1, self.__colDimension)):
+            for i in range(max(0,current_x - 1), min(current_x + 1 + 1, self.__rowDimension)):
+                for j in range(max(0,current_y - 1), min(current_y + 1 + 1, self.__colDimension)):
                     if self.__effectiveLabelArray[i][j] == -1:
                         self.__frontier_covered.add((i, j))
                         
