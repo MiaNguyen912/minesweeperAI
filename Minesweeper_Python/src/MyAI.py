@@ -4,112 +4,159 @@
 # AUTHOR: 		Justin Chung
 #
 # DESCRIPTION:	This file contains the MyAI class. You will implement your
-# 				agent in this file. You will write the 'getAction' function,
-# 				the constructor, and any additional helper functions.
+#				agent in this file. You will write the 'getAction' function,
+#				the constructor, and any additional helper functions.
 #
 # NOTES: 		- MyAI inherits from the abstract AI class in AI.py.
 #
-# 				- DO NOT MAKE CHANGES TO THIS FILE.
+#				- DO NOT MAKE CHANGES TO THIS FILE.
 # ==============================CS-199==================================
 
 from AI import AI
 from Action import Action
-import random
+
+MINE = 100
+COVERED = 200
+SAFE = 300
+labeled = [MINE, COVERED, SAFE]
+
+class MyAI( AI ):
 
 
-class MyAI(AI):
 
-    def __init__(self, rowDimension, colDimension, totalMines, startX, startY):
-        ########################################################################
-        # 							YOUR CODE BEGINS						   #
-        ########################################################################
+	def __init__(self, rowDimension, colDimension, totalMines, startX, startY):
 
-        # NOTE: the first tile is uncovered automatically for user
-        # NOTE: X and Y coordinates of World start at 1, not 0
+		# Constructor Initializations
+		self._rowDimension = rowDimension
+		self._colDimension = colDimension
+		self._totalMines = totalMines # keep track of how many mines are left in the game
+		self.startingMines = totalMines # Constant: the number of mines we started with
+		self._startX = startX
+		self._startY = startY
 
-        self.__rowDimension = rowDimension
-        self.__colDimension = colDimension
-        self.__totalMines = totalMines
-        self.__startX = (startX - 1)  # the inital tile at (__startX, __startY) is guaranteed to be safe (0 mines around)
-        self.__startY = startY - 1
-        self.__flagRemaining = totalMines
-        self.__tilesCovered = ( rowDimension * colDimension - 1 )  # number of covered tiles (including flagged tiles)
-        self.__tilesRemaining = ( rowDimension * colDimension - 1 )  # number of covered tiles (not including flagged tiles)
-        self.__frontier = set([(startX, startY)]) # set of tuples (use set to disallow duplication)
-        self.__tilesToUncover = set()
+		# Game Initialization
+		self.board = [[COVERED] * self._colDimension for _ in range(self._rowDimension)] 
+		self.prevMove = (startX, startY)
+		self.remainingTiles = (rowDimension * colDimension)
 
-        # create Effective label array:
-        # - covered tiles: -1
-        # - uncovered tiles: number of mines around them - number of flags around them
-        # - flagged tiles: - 99
 
-        # EXAMPLE:
-        # __effectiveLabelArray = [
-        # 							[-1, -1, -1, 0, -99],
-        # 							[-1, -1, -1, -1, -1],
-        # 							[-1, -1, -1, -1, -1],
-        # 							[-1, -1, -1, -1, -1],
-        # 							[-1, -1, -1, -1, -1],
-        # 						  ]
-        self.__effectiveLabelArray = [
-            [-1 for _ in range(colDimension)] for _ in range(rowDimension)
-        ]
-        self.__effectiveLabelArray[startX][startY] = 0
-        # print(self.__effectiveLabelArray)
+		self.uncoveredTiles = set()
+		#print(self.uncoveredTiles)
+		self.frontier = []
+		
 
-    def getAction(self, number: int) -> "Action Object":
-        pass
+	def inRange(self, i, j):
+		return (i >= 0 and i < self._rowDimension) and (j >= 0 and j < self._colDimension)
 
-        ########################################################################
-        # 							YOUR CODE BEGINS						   #
-        ########################################################################
+		
 
-        # action = AI.Action.LEAVE
-        # action = AI.Action.UNFLAG
-        # action = AI.Action.FLAG
-        # action = AI.Action.UNCOVER
+	def getNumAdjacentMinesAndCovered(self, x, y):
+		numMines = 0
+		coveredTiles = []
+		for i in range(x - 1, x + 2):
+			for j in range(y - 1, y + 2):
+				if self.inRange(i, j):
+					if (self.board[i][j] == MINE):
+						numMines += 1
+					elif(self.board[i][j] == COVERED):
+						coveredTiles.append((i, j))
 
-        # if done solving the world, leave
+		return numMines, coveredTiles
+
+
+	def flagTile(self, x, y):
+		for i in range(x - 1, x + 2):
+			for j in range(y - 1, y + 2):
+				if self.inRange(i, j) and i != x and j != y and self.board[x][y] not in labeled:
+					self.board[i][j] -= 1
+					if self.board[i][j] == 0:
+						_, coveredTiles = self.getNumAdjacentMinesAndCovered(i, j)
+						for coveredTile in coveredTiles:
+							coveredX, coveredY = coveredTile
+							if self.board[coveredX][coveredY] != SAFE:
+								self.board[coveredX][coveredY] = SAFE
+								self.frontier.append(coveredTile)
+		
+
+
+
+	def updateBoardNewMove(self, number):
+		x, y = self.prevMove
+
+		# numAdjacentMines is the number of known mines so far, covered tiles are all adjacent covered tiles that are not bombs
+		numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
+
+		# compute effective label by taking its hint number and subtracing all known mines around it
+		self.board[x][y] = number - numAdjacentMines
+
+		# if the effective label is equal to the number of covered tiles then all uncovered tiles are mines
+		if number == len(coveredTiles):
+			for i, j in coveredTiles:
+				self.board[i][j] = MINE
+				self._totalMines -= 1	
+
+
+		# if the hint number is equal to the number of mines we are aware of or if it's 0, then the rest must be safe
+		if number == 0 or number == numAdjacentMines:
+			for i, j in coveredTiles:
+				if self.board[i][j] != SAFE:
+					self.board[i][j] = SAFE
+					self.frontier.append((i, j))
+
+
+	def updateBoardExistingTiles(self, move):
+		x, y = move
+		numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
+
+		# if the effective label is equal to the number of covered tiles then all uncovered tiles are mines
+		#print(self.board[x][y])
+		if self.board[x][y] == len(coveredTiles):
+			for i, j in coveredTiles:
+				self.board[i][j] = MINE
+				self._totalMines -= 1	
+
+
+		# if the hint number is equal to the number of mines we are aware of or if it's 0, then the rest must be safe
+		if self.board[x][y] == 0 or self.board[x][y] == numAdjacentMines:
+			for i, j in coveredTiles:
+				if self.board[i][j] != SAFE:
+					self.board[i][j] = SAFE
+					self.frontier.append((i, j))
+
+
+
+		
+	def getAction(self, number: int) -> "Action Object":
+		# If the game is over leave (no more tiles left to uncover)
+		if (self.remainingTiles <= self.startingMines):
+			return Action(AI.Action.LEAVE)
+		
+		self.updateBoardNewMove(number)
+		#for row in self.board:
+		#	print(row)
+
+		if self.frontier:
+			moveX, moveY = self.frontier.pop()
+			self.prevMove = (moveX, moveY)
+			self.remainingTiles -= 1
+			return Action(AI.Action.UNCOVER, moveX, moveY)
+		
+		
+
+
+		
+				
+
+
+
+
+
+
+		
+
+
+
+
+		
         
 
-
-
-        if self.__tilesCovered == self.__totalMines:
-            return Action(AI.Action.LEAVE)
-
-        # if there are tiles waiting to be uncovered, uncover them
-        if len(self.__tilesToUncover) > 0:
-            x, y = self.__tilesToUncover.pop()
-            return Action(AI.Action.UNCOVER, x, y)
-
-        # scan the frontier
-        while len(self.__frontier) > 0:
-            processedTile = self.__frontier.pop()
-            print(processedTile)
-            processedTile_X, processedTile_Y = processedTile
-
-            if self.__effectiveLabelArray[processedTile_X][processedTile_Y] == 0:
-                for i in range(processedTile_X - 1, processedTile_X + 1 + 1):
-                    for j in range(processedTile_Y - 1, processedTile_Y + 1 + 1):
-                        if self.__effectiveLabelArray[i][j] == -1:
-                            self.__tilesToUncover.add((i, j))
-
-        # for i in range(self.__rowDimension):
-        #     for j in range(self.__rowDimension):
-        #         if self.__effectiveLabelArray[i][j] == 0: # if the tile has no bomb around
-        #                               zero_locations.append((i, j))
-
-        # while self.__moveCount < 5:
-        #     action = AI.Action(random.randrange(1, len(AI.Action)))
-        #     x = random.randrange(self.__colDimension)
-        #     y = random.randrange(self.__rowDimension)
-        #     self.__moveCount += 1
-        #     return Action(action, x, y)
-
-        # action = AI.Action(random.randrange(len(AI.Action)))
-        # x = random.randrange(self.__colDimension)
-        # y = random.randrange(self.__rowDimension)
-
-        # return Action(action, x, y)
-
-        # return Action(AI.Action.LEAVE)
