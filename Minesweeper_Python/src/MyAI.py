@@ -33,6 +33,7 @@ class MyAI( AI ):
 		self.startingMines = totalMines # Constant: the number of mines we started with
 		self._startX = startX
 		self._startY = startY
+		self.endGame = False
 
 		# Game Initialization
 		self.board = [[COVERED] * self._colDimension for _ in range(self._rowDimension)] 
@@ -40,7 +41,7 @@ class MyAI( AI ):
 		self.remainingTiles = (rowDimension * colDimension)
 
 
-		self.uncoveredTiles = set()
+		self.coveredTiles = {(x, y) for x in range(self._rowDimension) for y in range(self._colDimension)}
 		#print(self.uncoveredTiles)
 		self.frontier = []
 		
@@ -80,66 +81,99 @@ class MyAI( AI ):
 
 
 
-	def updateBoardNewMove(self, number):
+	def sweepZeroes(self, number):
 		x, y = self.prevMove
 
 		# numAdjacentMines is the number of known mines so far, covered tiles are all adjacent covered tiles that are not bombs
-		numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
+		_, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
 
 		# compute effective label by taking its hint number and subtracing all known mines around it
-		self.board[x][y] = number - numAdjacentMines
-
-		# if the effective label is equal to the number of covered tiles then all uncovered tiles are mines
-		if number == len(coveredTiles):
-			for i, j in coveredTiles:
-				self.board[i][j] = MINE
-				self._totalMines -= 1	
-
+		self.board[x][y] = number
 
 		# if the hint number is equal to the number of mines we are aware of or if it's 0, then the rest must be safe
-		if number == 0 or number == numAdjacentMines:
+		if self.board[x][y] == 0:
 			for i, j in coveredTiles:
 				if self.board[i][j] != SAFE:
 					self.board[i][j] = SAFE
 					self.frontier.append((i, j))
 
 
-	def updateBoardExistingTiles(self, move):
-		x, y = move
-		numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
+	def findMine(self):
+		for i in range(self._rowDimension):
+			for j in range(self._colDimension):
+				_, mineTiles = self.getNumAdjacentMinesAndCovered(i, j)
+				if len(mineTiles) == 1:
+					return i, j
+		
 
-		# if the effective label is equal to the number of covered tiles then all uncovered tiles are mines
-		#print(self.board[x][y])
-		if self.board[x][y] == len(coveredTiles):
-			for i, j in coveredTiles:
-				self.board[i][j] = MINE
-				self._totalMines -= 1	
+	def countThreats(self, x, y):
+		threats = 0
+		for i in range(x - 1, x + 2):
+			for j in range(y - 1, y + 2):
+				if self.inRange(i, j) and i != x and j != y and self.board[i][j] == 1:
+					threats += 1
+		return threats
 
 
-		# if the hint number is equal to the number of mines we are aware of or if it's 0, then the rest must be safe
-		if self.board[x][y] == 0 or self.board[x][y] == numAdjacentMines:
-			for i, j in coveredTiles:
-				if self.board[i][j] != SAFE:
-					self.board[i][j] = SAFE
-					self.frontier.append((i, j))
+	def getMostThreatened(self):
+		maxThreat = 0
+		mineTile = None
+		for tile in self.coveredTiles:
+			if maxThreat < self.countThreats(tile[0], tile[1]):
+				maxThreat = self.countThreats(tile[0], tile[1])
+				mineTile = tile
+		return mineTile
+
 
 
 
 		
 	def getAction(self, number: int) -> "Action Object":
 		# If the game is over leave (no more tiles left to uncover)
-		if (self.remainingTiles <= self.startingMines):
-			return Action(AI.Action.LEAVE)
-		
-		self.updateBoardNewMove(number)
-		#for row in self.board:
-		#	print(row)
+		while True:
+			if (self.remainingTiles <= self.startingMines):
+				return Action(AI.Action.LEAVE)
+			
+			self.sweepZeroes(number)
+			#for row in self.board:
+			#	print(row)
+			
+			if self.endGame:
+				moveX, moveY = self.frontier.pop()
+				self.prevMove = (moveX, moveY)
+				self.remainingTiles -= 1
+				self.coveredTiles.remove((moveX, moveY))
+				return Action(AI.Action.UNCOVER, moveX, moveY)
 
-		if self.frontier:
-			moveX, moveY = self.frontier.pop()
-			self.prevMove = (moveX, moveY)
-			self.remainingTiles -= 1
-			return Action(AI.Action.UNCOVER, moveX, moveY)
+
+
+			if self.frontier:
+				moveX, moveY = self.frontier.pop()
+				self.prevMove = (moveX, moveY)
+				self.remainingTiles -= 1
+				self.coveredTiles.remove((moveX, moveY))
+				return Action(AI.Action.UNCOVER, moveX, moveY)
+			
+			
+			mineX, mineY = self.getMostThreatened()
+			self.board[mineX][mineY] = MINE
+			self.coveredTiles.remove((mineX, mineY))
+			for tile in self.coveredTiles:
+				self.frontier.append(tile)
+
+
+			self.endGame = True
+
+
+
+
+
+
+
+		
+
+
+
 		
 		
 
