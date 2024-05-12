@@ -63,7 +63,6 @@ class MyAI( AI ):
 					elif(self.board[i][j] == COVERED):
 						coveredTiles.add((i, j))
 
-
 		return numMines, coveredTiles
 
 
@@ -100,8 +99,6 @@ class MyAI( AI ):
 				self._totalMines -= 1	
 				self.mines.add((i,j))
 
-
-
 		# if the hint number is equal to the number of mines we are aware of or if it's 0, then the rest must be safe
 		if number == 0 or number == numAdjacentMines:
 			for i, j in coveredTiles:
@@ -110,27 +107,6 @@ class MyAI( AI ):
 					self.frontier.add((i, j))
 
 
-
-	def updateBoardExistingTiles(self, move):
-		x, y = move
-		numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
-
-		# if the effective label is equal to the number of covered tiles then all uncovered tiles are mines
-		#print(self.board[x][y])
-		if self.board[x][y] == len(coveredTiles):
-			for i, j in coveredTiles:
-				self.board[i][j] = MINE
-				self._totalMines -= 1	
-				# self.remainingTile -= 1
-				# self.mines.add((i,j))
-
-
-		# if the hint number is equal to the number of mines we are aware of or if it's 0, then the rest must be safe
-		if self.board[x][y] == 0 or self.board[x][y] == numAdjacentMines:
-			for i, j in coveredTiles:
-				if self.board[i][j] != SAFE:
-					self.board[i][j] = SAFE
-					self.frontier.add((i, j))
 
 
 	def print_status(self):
@@ -163,9 +139,7 @@ class MyAI( AI ):
 			return Action(AI.Action.LEAVE)
 		
 		
-		
 		self.print_status()
-		# print("returned number: ", number)
 
 
 		if self.frontier:
@@ -193,12 +167,17 @@ class MyAI( AI ):
 					numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
 
 					# if effective number == number of covered tiles, all covered tiles are mines
-					if self.board[x][y] == len(coveredTiles):
+					if self.board[x][y] == len(coveredTiles) and len(self.mines) + self.numFlaggedTiles < self._totalMines:
 						for i in range(max(0, x - 1), min(x + 1 + 1, self._rowDimension)):
 							for j in range(max(0, y - 1), min(y + 1 + 1, self._colDimension)):
 								if self.board[i][j] == COVERED:
 									self.board[i][j] = MINE
 									self.mines.add((i,j))
+				
+	
+
+
+
 
 		prev_X, prev_Y = self.prevMove
 		print("Do nothing in this loop")
