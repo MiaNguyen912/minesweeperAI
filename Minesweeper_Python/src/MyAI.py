@@ -41,6 +41,7 @@ class MyAI( AI ):
   
 		self.frontier_uncovered = set()   # list of frontier tiles that are uncovered
 		self.frontier_covered = set()   # list of tiles to be uncovered
+		self.frontier_covered_safe = set()   	# list of safe tiles to be uncovered
 		self.mines = set() # list of mines to be flagged
 		
 
@@ -82,12 +83,20 @@ class MyAI( AI ):
 		for i in range(x - 1, x + 2):
 			for j in range(y - 1, y + 2):
 				if self.inRange(i, j) and (i, j) != (x, y):
-					if (self.board[i][j] == MINE):
+					if (self.board[i][j] == MINE or self.board[i][j] == -1): # MINE denotes unflagged mines, -1 is flagged mines
 						numMines += 1
 					elif(self.board[i][j] == COVERED_UNKNOWN or self.board[i][j] == COVERED_SAFE):
 						coveredTiles.add((i, j))
 		return numMines, coveredTiles
 
+
+	def getAdjacentUncovered(self, x, y):
+		uncoveredTiles = set()
+		for i in range(x - 1, x + 2):
+			for j in range(y - 1, y + 2):
+				if self.inRange(i, j) and (i, j) != (x, y) and 0 <= self.board[i][j] <= 8:
+					uncoveredTiles.add((i, j))
+		return uncoveredTiles
 
 	def flagTile(self, x, y):
 		for i in range(x - 1, x + 2):
@@ -100,7 +109,7 @@ class MyAI( AI ):
 							coveredX, coveredY = coveredTile
 							if self.board[coveredX][coveredY] != COVERED_SAFE:
 								self.board[coveredX][coveredY] = COVERED_SAFE
-								self.frontier_covered.append(coveredTile)
+								self.frontier_covered_safe.append(coveredTile)
 		
 
 
@@ -127,17 +136,18 @@ class MyAI( AI ):
 			for i, j in coveredTiles:
 				if self.board[i][j] != COVERED_SAFE:
 					self.board[i][j] = COVERED_SAFE
-					self.frontier_covered.add((i, j))
+					self.frontier_covered_safe.add((i, j))
 
 
 
 
 	def print_status(self):
-		print("\n")
+		# print("\n")
 		for row in self.board:
 			print(row)
 		print("Frontier_uncovered: ", self.frontier_uncovered)
 		print("frontier_covered: ", self.frontier_covered)
+		print("frontier_covered_safe: ", self.frontier_covered_safe)
 		print("mines: ", self.mines)
 		print("Num covered tiles: ", self.remainingTiles)
 		print("Num covered, unflagged tiles: ", self.numCoveredUnflaggedTiles)
@@ -153,9 +163,10 @@ class MyAI( AI ):
 			for x in range(self._rowDimension):
 				for y in range(self._colDimension):
 					if self.board[x][y] == COVERED_UNKNOWN:
-						self.frontier_covered.add((x,y))
+						self.board[x][y] = COVERED_SAFE # update board
+						self.frontier_covered_safe.add((x,y))
 
-
+		# if uncovered/flagged all tiles -> leave game
 		if self.numCoveredUnflaggedTiles == 0:
 			self.print_status()
 			print("No more covered unflagged tile, Leaving game")
@@ -163,46 +174,76 @@ class MyAI( AI ):
 		
 		
 		
-		# self.frontier_uncovered = self.get_frontier_uncovered()
-		# self.frontier_covered = self.get_frontier_covered()
+		self.frontier_uncovered = self.get_frontier_uncovered()
+		self.frontier_covered = self.get_frontier_covered()
 		self.print_status()
 
-		if self.frontier_covered:
-			moveX, moveY = self.frontier_covered.pop()
+		# uncover all tiles in frontier_covered_safe
+		if self.frontier_covered_safe:
+			moveX, moveY = self.frontier_covered_safe.pop()
 			self.prevMove = (moveX, moveY)
 			self.prevAction = AI.Action.UNCOVER
 			self.remainingTiles -= 1
 			self.numCoveredUnflaggedTiles -=1
 			return Action(AI.Action.UNCOVER, moveX, moveY)
 
-		
+		# if frontier_covered_safe is empty, it means no safe tile left -> start flagging known mines
 		elif self.mines: 
-			# if frontier is empty, it means no safe tile left -> start flagging known mines
 			flagX, flagY = self.mines.pop()
 			self.prevMove = (flagX, flagY)
 			self.prevAction = AI.Action.FLAG
 			self.numCoveredUnflaggedTiles -=1
 			self.numFlaggedTiles += 1
+			self.board[flagX][flagY] = MINE
+			# update board
+			for i in range(flagX - 1, flagX + 2):
+				for j in range(flagY - 1, flagY + 2):
+					if self.inRange(i, j) and (i, j) != (flagX, flagX) and 1 <= self.board[i][j] <= 8:
+						self.board[i][j] -= 1
+					
+      
 			return Action(AI.Action.FLAG, flagX, flagY)
 		
+ 		# else, start checking for unknown mines		
 		else:
-			# start checking for unknown mines		
+			# scan through every tile to see if effective number of a tile == number of covered tiles around it, then all covered tiles around it are mines
 			for x in range(self._rowDimension):
 				for y in range(self._colDimension):
 					numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
-
-					# if effective number == number of covered tiles, all covered tiles are mines
+     
 					if self.board[x][y] == len(coveredTiles) and len(self.mines) + self.numFlaggedTiles < self._totalMines:
 						for i in range(max(0, x - 1), min(x + 1 + 1, self._rowDimension)):
 							for j in range(max(0, y - 1), min(y + 1 + 1, self._colDimension)):
 								if self.board[i][j] == COVERED_UNKNOWN:
-									self.board[i][j] = MINE
+									print("-------", (i,j), (x,y), " ---- num adjacent mine: ", numAdjacentMines)
 									self.mines.add((i,j))
-				
-			# if no mine was detected, use probability to detect mines
-			# if (len(self.mines) == 0):
-				
+					# elif self.board[x][y] == 0:
+					# 	for a,b in coveredTiles:
+							
 
+				
+			# if no mine has been detected, use probability to detect mines
+			if (len(self.mines) == 0):
+				probability = dict()
+				for tile_x, tile_y in self.frontier_covered:
+					# add all effective numbers of uncovered tiles around it
+					adjacenUncoveredTiles = self.getAdjacentUncovered(tile_x, tile_y)
+					for xcoor, ycoor in adjacenUncoveredTiles:
+						sum = self.board[xcoor][ycoor]
+						if (probability.get((tile_x, tile_y))):
+							probability[(tile_x, tile_y)] += sum
+						else: 
+							probability[(tile_x, tile_y)] = sum
+
+				# get the tile with lowest chance of being mine, and add it to the frontier_covered_safe
+				print("probability: ", probability)
+				min_p = min(probability, key=probability.get)
+				self.frontier_covered_safe.add(min_p)
+    
+        
+					
+					
+        
 
 
 		prev_X, prev_Y = self.prevMove
