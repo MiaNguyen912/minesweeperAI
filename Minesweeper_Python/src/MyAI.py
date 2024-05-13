@@ -168,15 +168,15 @@ class MyAI( AI ):
 
 		# if uncovered/flagged all tiles -> leave game
 		if self.numCoveredUnflaggedTiles == 0:
-			self.print_status()
-			print("No more covered unflagged tile, Leaving game")
+			# self.print_status()
+			# print("No more covered unflagged tile, Leaving game")
 			return Action(AI.Action.LEAVE)
 		
 		
 		
 		self.frontier_uncovered = self.get_frontier_uncovered()
 		self.frontier_covered = self.get_frontier_covered()
-		self.print_status()
+		# self.print_status()
 
 		# uncover all tiles in frontier_covered_safe
 		if self.frontier_covered_safe:
@@ -215,7 +215,6 @@ class MyAI( AI ):
 						for i in range(max(0, x - 1), min(x + 1 + 1, self._rowDimension)):
 							for j in range(max(0, y - 1), min(y + 1 + 1, self._colDimension)):
 								if self.board[i][j] == COVERED_UNKNOWN:
-									print("-------", (i,j), (x,y), " ---- num adjacent mine: ", numAdjacentMines)
 									self.mines.add((i,j))
 					# elif self.board[x][y] == 0:
 					# 	for a,b in coveredTiles:
@@ -236,7 +235,7 @@ class MyAI( AI ):
 							probability[(tile_x, tile_y)] = sum
 
 				# get the tile with lowest chance of being mine, and add it to the frontier_covered_safe
-				print("probability: ", probability)
+				# print("probability: ", probability)
 				min_p = min(probability, key=probability.get)
 				self.frontier_covered_safe.add(min_p)
     
@@ -247,7 +246,7 @@ class MyAI( AI ):
 
 
 		prev_X, prev_Y = self.prevMove
-		print("Do nothing in this loop")
+		# print("Do nothing in this loop")
 		return Action(self.prevAction, prev_X, prev_Y) # means do nothing
 
 
