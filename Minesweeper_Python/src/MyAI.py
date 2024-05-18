@@ -121,15 +121,20 @@ class MyAI( AI ):
 		# numAdjacentMines is the number of known mines so far, covered tiles are all adjacent covered tiles that are not bombs
 		numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
 
-		# compute effective label by taking its hint number and subtracing all known mines around it
-		self.board[x][y] = number - numAdjacentMines
+		# if not mine, compute effective label by taking its hint number and subtracing all known mines around it
+		if number != -1: 
+			self.board[x][y] = number - numAdjacentMines
+		else:
+			self.board[x][y] = number
+			
 
 		# if the effective label is equal to the number of covered tiles then all uncovered tiles are mines
-		if number == len(coveredTiles):
+		if self.board[x][y] == len(coveredTiles):
 			for i, j in coveredTiles:
 				self.board[i][j] = MINE
 				self._totalMines -= 1	
 				self.mines.add((i,j))
+				print("loop 2")
 
 		# if the hint number is equal to the number of mines we are aware of or if it's 0, then the rest must be safe
 		if number == 0 or number == numAdjacentMines:
@@ -142,13 +147,44 @@ class MyAI( AI ):
 
 
 	def print_status(self):
-		# print("\n")
-		for row in self.board:
-			print(row)
-		print("Frontier_uncovered: ", self.frontier_uncovered)
-		print("frontier_covered: ", self.frontier_covered)
-		print("frontier_covered_safe: ", self.frontier_covered_safe)
-		print("mines: ", self.mines)
+		# Transpose the array
+		transposed_array = list(zip(*self.board))
+
+		# Reverse each row
+		rotated_array = [list(row)[::-1] for row in transposed_array]
+
+		# Reverse the order of the rows
+		rotated_array.reverse()
+  
+		# Print out the rotated board
+		for row in rotated_array:
+			print(row[::-1])
+  
+   
+		modified_frontier_uncovered = set()
+		modified_frontier_covered = set()
+		modified_frontier_covered_safe = set()
+		modified_mines = set()
+
+		for tuple_pair in self.frontier_uncovered:
+			modified_tuple = tuple(x + 1 for x in tuple_pair)
+			modified_frontier_uncovered.add(modified_tuple)
+		for tuple_pair in self.frontier_covered:
+			modified_tuple = tuple(x + 1 for x in tuple_pair)
+			modified_frontier_covered.add(modified_tuple)
+		for tuple_pair in self.frontier_covered_safe:
+			modified_tuple = tuple(x + 1 for x in tuple_pair)
+			modified_frontier_covered_safe.add(modified_tuple)
+		for tuple_pair in self.mines:
+			modified_tuple = tuple(x + 1 for x in tuple_pair)
+			modified_mines.add(modified_tuple)
+   
+
+   
+		print("Frontier_uncovered: ", modified_frontier_uncovered)
+		print("frontier_covered: ", modified_frontier_covered)
+		print("frontier_covered_safe: ", modified_frontier_covered_safe)
+		print("mines: ", modified_mines)
 		print("Num covered tiles: ", self.remainingTiles)
 		print("Num covered, unflagged tiles: ", self.numCoveredUnflaggedTiles)
 		print("Num flagged tiles: ", self.numFlaggedTiles)
@@ -168,15 +204,15 @@ class MyAI( AI ):
 
 		# if uncovered/flagged all tiles -> leave game
 		if self.numCoveredUnflaggedTiles == 0:
-			# self.print_status()
-			# print("No more covered unflagged tile, Leaving game")
+			self.print_status()
+			print("No more covered unflagged tile, Leaving game")
 			return Action(AI.Action.LEAVE)
 		
 		
 		
 		self.frontier_uncovered = self.get_frontier_uncovered()
 		self.frontier_covered = self.get_frontier_covered()
-		# self.print_status()
+		self.print_status()
 
 		# uncover all tiles in frontier_covered_safe
 		if self.frontier_covered_safe:
@@ -198,9 +234,11 @@ class MyAI( AI ):
 			# update board
 			for i in range(flagX - 1, flagX + 2):
 				for j in range(flagY - 1, flagY + 2):
-					if self.inRange(i, j) and (i, j) != (flagX, flagX) and 1 <= self.board[i][j] <= 8:
+					if self.inRange(i, j) and (i, j) != (flagX, flagY) and 1 <= self.board[i][j] <= 8:
 						self.board[i][j] -= 1
-					
+
+						
+			# TODO:		
       
 			return Action(AI.Action.FLAG, flagX, flagY)
 		
@@ -211,33 +249,50 @@ class MyAI( AI ):
 				for y in range(self._colDimension):
 					numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
      
-					if self.board[x][y] == len(coveredTiles) and len(self.mines) + self.numFlaggedTiles < self._totalMines:
+					if self.board[x][y] == len(coveredTiles)  and len(self.mines) + self.numFlaggedTiles < self._totalMines:
 						for i in range(max(0, x - 1), min(x + 1 + 1, self._rowDimension)):
 							for j in range(max(0, y - 1), min(y + 1 + 1, self._colDimension)):
 								if self.board[i][j] == COVERED_UNKNOWN:
 									self.mines.add((i,j))
-					# elif self.board[x][y] == 0:
-					# 	for a,b in coveredTiles:
-							
-
-				
+									print("loop 1 - got from scanning ", (x,y), " --- coveredTiles: ", coveredTiles)
+								
 			# if no mine has been detected, use probability to detect mines
 			if (len(self.mines) == 0):
+       
+       
 				probability = dict()
 				for tile_x, tile_y in self.frontier_covered:
 					# add all effective numbers of uncovered tiles around it
 					adjacenUncoveredTiles = self.getAdjacentUncovered(tile_x, tile_y)
 					for xcoor, ycoor in adjacenUncoveredTiles:
 						sum = self.board[xcoor][ycoor]
+						if sum == 0:
+							probability[(tile_x, tile_y)] = 0
+							break
 						if (probability.get((tile_x, tile_y))):
 							probability[(tile_x, tile_y)] += sum
 						else: 
 							probability[(tile_x, tile_y)] = sum
 
 				# get the tile with lowest chance of being mine, and add it to the frontier_covered_safe
-				# print("probability: ", probability)
-				min_p = min(probability, key=probability.get)
-				self.frontier_covered_safe.add(min_p)
+				tile_with_min_mine_probability = min(probability, key=probability.get)
+				if probability[tile_with_min_mine_probability] == 0:
+					# add all tiles with 0 probability of mine to frontier_covered_safe
+					print("abcd")
+					for key, value in probability.items():
+						if value == 0:
+							self.frontier_covered_safe.add(key)
+				else:
+					self.frontier_covered_safe.add(tile_with_min_mine_probability)
+     
+				modified_probability = dict() # use modified_probability to print out
+				for key, value in probability.items():
+					modified_key = tuple(x + 1 for x in key)
+					# Add the modified key-value pair to the new dictionary
+					modified_probability[modified_key] = value
+
+				print("probability: ", modified_probability)
+    
     
         
 					
