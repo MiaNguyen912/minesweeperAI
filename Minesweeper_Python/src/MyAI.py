@@ -12,6 +12,7 @@
 #				- DO NOT MAKE CHANGES TO THIS FILE.
 # ==============================CS-199==================================
 
+import math
 from AI import AI
 from Action import Action
 
@@ -26,8 +27,8 @@ class MyAI( AI ):
 		# Constructor Initializations
 		self._rowDimension = rowDimension
 		self._colDimension = colDimension
-		self._totalMines = totalMines # keep track of how many mines are left in the game
-		self.startingMines = totalMines # Constant: the number of mines we started with
+		self.numMinesLeft = totalMines # keep track of how many mines are left in the game
+		self.numStartingMines = totalMines # Constant: the number of mines we started with
 		self._startX = startX
 		self._startY = startY
 
@@ -43,6 +44,7 @@ class MyAI( AI ):
 		self.frontier_covered = set()   # list of tiles to be uncovered
 		self.frontier_covered_safe = set()   	# list of safe tiles to be uncovered
 		self.mines = set() # list of mines to be flagged
+		self.numConsecutiveLoopThatDoNothing = 0
 		
 
 	def inRange(self, i, j):
@@ -54,7 +56,7 @@ class MyAI( AI ):
 		frontier_uncovered = set()
 		for row in range(self._rowDimension):
 			for col in range(self._colDimension):
-				if self.board[row][col] <= 8: # 8 is the max number of mine around a tile, the effective lable <= 8 means the tile is uncovered and is not mine/flagged
+				if 0<= self.board[row][col] <= 8: # 8 is the max number of mine around a tile, the effective lable <= 8 means the tile is uncovered and is not mine/flagged
 					numMine, adjacentCovered = self.getNumAdjacentMinesAndCovered(row,col)
 					if len(adjacentCovered) > 0:
 						frontier_uncovered.add((row,col))
@@ -132,9 +134,8 @@ class MyAI( AI ):
 		if self.board[x][y] == len(coveredTiles):
 			for i, j in coveredTiles:
 				self.board[i][j] = MINE
-				self._totalMines -= 1	
+				self.numMinesLeft -= 1	
 				self.mines.add((i,j))
-				print("loop 2")
 
 		# if the hint number is equal to the number of mines we are aware of or if it's 0, then the rest must be safe
 		if number == 0 or number == numAdjacentMines:
@@ -194,8 +195,15 @@ class MyAI( AI ):
 	def getAction(self, number: int) -> "Action Object":
 		self.updateBoardNewMove(number)
 
+		if self.numCoveredUnflaggedTiles == self.numMinesLeft:
+			for x in range(self._rowDimension):
+				for y in range(self._colDimension):
+					if self.board[x][y] > 8:
+						self.numMinesLeft -= 1	
+						self.mines.add((x,y))
+
 		# If the game is over -> uncover all remaining tiles and leave (no more tiles left to uncover)
-		if (self.numFlaggedTiles == self.startingMines):
+		if (self.numFlaggedTiles == self.numStartingMines):
 			for x in range(self._rowDimension):
 				for y in range(self._colDimension):
 					if self.board[x][y] == COVERED_UNKNOWN:
@@ -204,15 +212,15 @@ class MyAI( AI ):
 
 		# if uncovered/flagged all tiles -> leave game
 		if self.numCoveredUnflaggedTiles == 0:
-			self.print_status()
-			print("No more covered unflagged tile, Leaving game")
+			# self.print_status()
+			# print("No more covered unflagged tile, Leaving game")
+			self.numConsecutiveLoopThatDoNothing = 0 # reset this variable
 			return Action(AI.Action.LEAVE)
-		
-		
+
 		
 		self.frontier_uncovered = self.get_frontier_uncovered()
 		self.frontier_covered = self.get_frontier_covered()
-		self.print_status()
+		# self.print_status()
 
 		# uncover all tiles in frontier_covered_safe
 		if self.frontier_covered_safe:
@@ -221,6 +229,7 @@ class MyAI( AI ):
 			self.prevAction = AI.Action.UNCOVER
 			self.remainingTiles -= 1
 			self.numCoveredUnflaggedTiles -=1
+			self.numConsecutiveLoopThatDoNothing = 0 # reset this variable
 			return Action(AI.Action.UNCOVER, moveX, moveY)
 
 		# if frontier_covered_safe is empty, it means no safe tile left -> start flagging known mines
@@ -236,30 +245,22 @@ class MyAI( AI ):
 				for j in range(flagY - 1, flagY + 2):
 					if self.inRange(i, j) and (i, j) != (flagX, flagY) and 1 <= self.board[i][j] <= 8:
 						self.board[i][j] -= 1
-
-						
-			# TODO:		
-      
+			self.numConsecutiveLoopThatDoNothing = 0 # reset this variable
 			return Action(AI.Action.FLAG, flagX, flagY)
 		
  		# else, start checking for unknown mines		
 		else:
-			# scan through every tile to see if effective number of a tile == number of covered tiles around it, then all covered tiles around it are mines
-			for x in range(self._rowDimension):
-				for y in range(self._colDimension):
-					numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
-     
-					if self.board[x][y] == len(coveredTiles)  and len(self.mines) + self.numFlaggedTiles < self._totalMines:
-						for i in range(max(0, x - 1), min(x + 1 + 1, self._rowDimension)):
-							for j in range(max(0, y - 1), min(y + 1 + 1, self._colDimension)):
-								if self.board[i][j] == COVERED_UNKNOWN:
-									self.mines.add((i,j))
-									print("loop 1 - got from scanning ", (x,y), " --- coveredTiles: ", coveredTiles)
+			# scan frontier_uncovered to see if effective number of a tile == number of covered tiles around it, then all covered tiles around it are mines
+			for x, y in self.frontier_uncovered:
+				numAdjacentMines, coveredTiles = self.getNumAdjacentMinesAndCovered(x, y)
+				if self.board[x][y] == len(coveredTiles):
+					for i, j in coveredTiles:
+						if self.board[i][j] == COVERED_UNKNOWN:
+							self.numMinesLeft -= 1	
+							self.mines.add((i,j))
 								
-			# if no mine has been detected, use probability to detect mines
+			# if no mine has been detected, scan frontier_covered and use probability to detect mines
 			if (len(self.mines) == 0):
-       
-       
 				probability = dict()
 				for tile_x, tile_y in self.frontier_covered:
 					# add all effective numbers of uncovered tiles around it
@@ -275,33 +276,44 @@ class MyAI( AI ):
 							probability[(tile_x, tile_y)] = sum
 
 				# get the tile with lowest chance of being mine, and add it to the frontier_covered_safe
-				tile_with_min_mine_probability = min(probability, key=probability.get)
-				if probability[tile_with_min_mine_probability] == 0:
-					# add all tiles with 0 probability of mine to frontier_covered_safe
-					print("abcd")
-					for key, value in probability.items():
-						if value == 0:
-							self.frontier_covered_safe.add(key)
-				else:
-					self.frontier_covered_safe.add(tile_with_min_mine_probability)
-     
-				modified_probability = dict() # use modified_probability to print out
-				for key, value in probability.items():
-					modified_key = tuple(x + 1 for x in key)
-					# Add the modified key-value pair to the new dictionary
-					modified_probability[modified_key] = value
+				if (len(probability) != 0):
+					tile_with_min_mine_probability = min(probability, key=probability.get)
+					
 
-				print("probability: ", modified_probability)
-    
-    
+					if probability[tile_with_min_mine_probability] == 0:
+						# add all tiles with 0 probability of mine to frontier_covered_safe
+						for key, value in probability.items():
+							if value == 0:
+								self.frontier_covered_safe.add(key)
         
-					
-					
-        
+					elif self.numConsecutiveLoopThatDoNothing > 1: 
+						# if all covered tiles have only 1 unique value -> uncover a tile farthest from to center
+						max_distance_to_center = 0
+						tile_farthest_from_center = None
+						for key, value in probability.items():
+							x, y = key
+							distance_to_center = math.sqrt((x - 3)**2 + (y - 3)**2) # center of board is (3,3)
+							if distance_to_center > max_distance_to_center:
+								max_distance_to_center = distance_to_center
+								tile_farthest_from_center = (x,y)
+						self.frontier_covered_safe.add(tile_farthest_from_center)
+		
+					# print out probability
+					modified_probability = dict() # use modified_probability to print out
+					for key, value in probability.items():
+						modified_key = tuple(x + 1 for x in key)
+						# Add the modified key-value pair to the new dictionary
+						modified_probability[modified_key] = value
+
+					# print("probability: ", modified_probability)
+     
+
+		
 
 
 		prev_X, prev_Y = self.prevMove
-		# print("Do nothing in this loop")
+		# print("Do nothing in this loop --- previous action: ", self.prevAction, " --- previous (x,y): ", (prev_X, prev_Y))
+		self.numConsecutiveLoopThatDoNothing += 1
 		return Action(self.prevAction, prev_X, prev_Y) # means do nothing
 
 
