@@ -25,8 +25,8 @@ class MyAI( AI ):
 
 	def __init__(self, rowDimension, colDimension, totalMines, startX, startY):
 		# Constructor Initializations
-		self._rowDimension = rowDimension
-		self._colDimension = colDimension
+		self._rowDimension = colDimension
+		self._colDimension = rowDimension
 		self.numMinesLeft = totalMines # keep track of how many mines are left in the game
 		self.numStartingMines = totalMines # Constant: the number of mines we started with
 		self._startX = startX
@@ -85,9 +85,13 @@ class MyAI( AI ):
 		for i in range(x - 1, x + 2):
 			for j in range(y - 1, y + 2):
 				if self.inRange(i, j) and (i, j) != (x, y):
-					if (self.board[i][j] == MINE or self.board[i][j] == -1): # MINE denotes unflagged mines, -1 is flagged mines
+					# if (self.board[i][j] == MINE or self.board[i][j] == -1): # MINE denotes unflagged mines, -1 is flagged mines
+					if ( self.board[i][j] == -1): # MINE denotes unflagged mines, -1 is flagged mines
+
 						numMines += 1
-					elif(self.board[i][j] == COVERED_UNKNOWN or self.board[i][j] == COVERED_SAFE):
+					# elif(self.board[i][j] == COVERED_UNKNOWN or self.board[i][j] == COVERED_SAFE):
+					elif(self.board[i][j] > 8):
+
 						coveredTiles.add((i, j))
 		return numMines, coveredTiles
 
@@ -100,7 +104,7 @@ class MyAI( AI ):
 					uncoveredTiles.add((i, j))
 		return uncoveredTiles
 
-	def flagTile(self, x, y):
+	# def flagTile(self, x, y):
 		for i in range(x - 1, x + 2):
 			for j in range(y - 1, y + 2):
 				if self.inRange(i, j) and i != x and j != y and self.board[x][y] not in labeled:
@@ -148,6 +152,9 @@ class MyAI( AI ):
 
 
 	def print_status(self):
+		# for row in self.board:
+		# 	print(row)
+     
 		# Transpose the array
 		transposed_array = list(zip(*self.board))
 
@@ -159,7 +166,10 @@ class MyAI( AI ):
   
 		# Print out the rotated board
 		for row in rotated_array:
-			print(row[::-1])
+			# print(row[::-1])
+			formatted_row = ''.join(f'{item:>4}' for item in row[::-1])
+			print(formatted_row)
+
   
    
 		modified_frontier_uncovered = set()
@@ -287,13 +297,18 @@ class MyAI( AI ):
 								self.frontier_covered_safe.add(key)
         
 					elif self.numConsecutiveLoopThatDoNothing > 1: 
-						# if all covered tiles have only 1 unique value -> uncover a tile farthest from to center
+						
+						# if all covered tiles have only 1 unique value -> uncover a tile farthest from to center within tiles with min probability
 						max_distance_to_center = 0
 						tile_farthest_from_center = None
+						min_probability = probability[tile_with_min_mine_probability]
+      
 						for key, value in probability.items():
+							if value != min_probability:
+								continue
 							x, y = key
 							distance_to_center = math.sqrt((x - 3)**2 + (y - 3)**2) # center of board is (3,3)
-							if distance_to_center > max_distance_to_center:
+							if distance_to_center >= max_distance_to_center:
 								max_distance_to_center = distance_to_center
 								tile_farthest_from_center = (x,y)
 						self.frontier_covered_safe.add(tile_farthest_from_center)

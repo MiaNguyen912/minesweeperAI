@@ -374,5 +374,6 @@ class World():
 		""" Returns true if given coordinates are within the boundaries of the game board """
 		if c < self.__colDimension and c >= 0 and r < self.__rowDimension and r >= 0:
 			return True
+		# print(c, " --- ", self.__colDimension, " -===- ", r, " --- ", self.__rowDimension)
 		return False
 
