@@ -14,10 +14,11 @@
 
 from AI import AI
 from Action import Action
+import random
 
-MINE = 100
-COVERED_UNMARKED = 200
-UNCOVERED = 300
+MINE = -100
+COVERED_UNMARKED = -200
+UNCOVERED = -300
 labeled = [MINE, COVERED_UNMARKED, UNCOVERED]
 
 class MyAI( AI ):
@@ -33,10 +34,10 @@ class MyAI( AI ):
 		self._startY = startY
 
 		# Game Initialization
-		self.board = [[COVERED_UNMARKED] * self._rowDimension for _ in range(self._colDimension)] 
+		self.board = [[COVERED_UNMARKED] * self._colDimension for _ in range(self._rowDimension)] 
 		self.currentMove = (startX, startY)
 		self.remainingTiles = (rowDimension * colDimension)
-		self.coveredTiles = {(x, y) for x in range(self._rowDimension) for y in range(self._colDimension)}
+		#self.coveredTiles = {(x, y) for x in range(self._rowDimension) for y in range(self._colDimension)}
 
 		self.uncoveredUnmarkedFrontier = set()
 		# self.coveredUnmarkedFrontier = set()
@@ -54,7 +55,7 @@ class MyAI( AI ):
 		adjacentCoveredTiles = []
 		for i in range(x - 1, x + 2):
 			for j in range(y - 1, y + 2):
-				if self.inRange(i, j) and self.board[i][j] == COVERED_UNMARKED:
+				if (i != x or j != y) and self.inRange(j, i) and self.board[j][i] == COVERED_UNMARKED:
 					adjacentCoveredTiles.append((i, j))
 
 		return adjacentCoveredTiles
@@ -64,7 +65,7 @@ class MyAI( AI ):
 		mines = 0
 		for i in range(x - 1, x + 2):
 			for j in range(y - 1, y + 2):
-				if self.inRange(i, j) and self.board[i][j] == MINE:
+				if (i != x or j != y) and self.inRange(j, i) and self.board[j][i] == MINE:
 					mines += 1
 		return mines
 
@@ -74,7 +75,8 @@ class MyAI( AI ):
 	def processSafeMove(self):
 		moveX, moveY = self.frontier.pop()
 		self.currentMove = (moveX, moveY)
-		self.remainingTiles -= 1
+		# self.remainingTiles -= 1
+
 		return Action(AI.Action.UNCOVER, moveX, moveY)
 	
 
@@ -87,7 +89,7 @@ class MyAI( AI ):
 		for Tile in self.uncoveredUnmarkedFrontier:
 			x, y = Tile
 			adjacentCoveredUnmarked = self.getAdjacentCoveredUnmarkedTiles(x, y)
-			safetyScore = 9 - self.board[x][y] + len(adjacentCoveredUnmarked)
+			safetyScore = (9 - self.board[y][x]) + len(adjacentCoveredUnmarked)
 			if safetyScore > bestSafetyScore:
 				bestTiles = adjacentCoveredUnmarked
 				bestSafetyScore = safetyScore
@@ -102,7 +104,6 @@ class MyAI( AI ):
 		if leastThreatened:
 			moveX, moveY = leastThreatened
 			self.currentMove = (moveX, moveY)
-			self.remainingTiles -= 1
 			return Action(AI.Action.UNCOVER, moveX, moveY)
 		else:
 			return None
@@ -110,35 +111,34 @@ class MyAI( AI ):
 
 	# Random move
 	def processRandomCovered(self):
-		moveX, moveY = self.coveredTiles.pop()
-		self.currentMove = (moveX, moveY)
-		self.remainingTiles -= 1
+		moves = set()
+		for i in range(self._colDimension):
+			for j in range(self._rowDimension):
+				if self.board[j][i] == COVERED_UNMARKED:
+					moves.add((i, j))
+
+		moveX, moveY = moves.pop()
 		return Action(AI.Action.UNCOVER, moveX, moveY)
 
 
 
 	def pushAllAdjacentToFrontier(self, x, y):
 		adjacentCoveredUnmarked = self.getAdjacentCoveredUnmarkedTiles(x, y)
-		for adjacent in adjacentCoveredUnmarked:
-			if adjacent in self.coveredTiles:
-				self.frontier.add(adjacent)
+		for adjX, adjY in adjacentCoveredUnmarked:
+			self.frontier.add((adjX, adjY))
+			self.board[adjY][adjX] = UNCOVERED
 
-
-	#def pushAllAdjacentToCoveredUnmarkedFrontier(self, x, y):
-	#	adjacentCoveredUnmarked = self.getAdjacentCoveredUnmarkedTiles(x, y)
-	#	for adjacent in adjacentCoveredUnmarked:
-	#		self.coveredUnmarkedFrontier.add(adjacent)
 
 
 	# This function marks a tile as a mine and updates the effective label of all adjacent. If any adjacent tiles becomes 0, then it becomes safe
 	def exposeMine(self, x, y):
-		self.board[x][y] = MINE
+		self.board[y][x] = MINE
 		#self.coveredUnmarkedFrontier.remove((x, y))
 		for i in range(x - 1, x + 2):
 			for j in range(y - 1, y + 2):
-				if self.inRange(i, j) and (i, j) in self.uncoveredUnmarkedFrontier:
-					self.board[i][j] -= 1
-					if(self.board[i][j] == 0):
+				if (i != x or j != y) and self.inRange(j, i) and self.board[j][i] > 0:
+					self.board[j][i] -= 1
+					if(self.board[j][i] == 0):
 						self.pushAllAdjacentToFrontier(i, j)
 
 
@@ -150,13 +150,14 @@ class MyAI( AI ):
 		for uncoveredUnmarked in self.uncoveredUnmarkedFrontier:
 			x, y = uncoveredUnmarked
 			coveredTiles = self.getAdjacentCoveredUnmarkedTiles(x, y)
-			if(len(coveredTiles) == self.board[x][y]):
+			if(len(coveredTiles) == self.board[y][x]):
 				mineTiles = coveredTiles
 				break
-		
+
 		if mineTiles:
 			for mineX, mineY in mineTiles:
 				self.exposeMine(mineX, mineY)
+			return False
 		else:
 			return True # No information was learned on the board
 		
@@ -164,43 +165,39 @@ class MyAI( AI ):
 	def revealSafe(self):
 		for tile in self.uncoveredUnmarkedFrontier:
 			x, y = tile
-			if(self.board[x][y] == 0):
-				self.uncoveredUnmarkedFrontier.remove((x, y))
+			if(self.board[y][x] == 0):
 				self.pushAllAdjacentToFrontier(x, y)
-				return False # Information was found on the board
+				self.uncoveredUnmarkedFrontier.remove((x, y))
+				return False
+
 		return True # No information was added
 			
 
 
 	
 	def printBoard(self):
+		mapping = {-200 : "X", -100 : "M"}
 		for row in self.board:
+			row = [mapping.get(x, x) for x in row]
 			print(row)
 
 
 		
 	def getAction(self, number: int) -> "Action Object":
-		# Process newest Move
-		if (len(self.coveredTiles) == self.startingMines):
-			return Action(AI.Action.LEAVE)
-
 
 		currentMoveX, currentMoveY = self.currentMove
-		self.board[currentMoveX][currentMoveY] = number - self.getNumAdjacentMines(currentMoveX, currentMoveY)
-		
-		if self.currentMove in self.coveredTiles:
-			self.coveredTiles.remove((currentMoveX, currentMoveY))
-		if (len(self.coveredTiles) == self.startingMines):
+		self.board[currentMoveY][currentMoveX] = number - self.getNumAdjacentMines(currentMoveX, currentMoveY)
+		# self.printBoard()
+		self.remainingTiles -= 1
+		if (self.remainingTiles == self.startingMines):
 			return Action(AI.Action.LEAVE)
 
-		#if (currentMoveX, currentMoveY) in self.coveredUnmarkedFrontier:
-		#	self.coveredUnmarkedFrontier.remove((currentMoveX, currentMoveY))
-
 		# If the newest move is a 0, then continuously sweep all the 0 mines
-		if self.board[currentMoveX][currentMoveY] == 0:
+		if self.board[currentMoveY][currentMoveX] == 0:
 			self.pushAllAdjacentToFrontier(currentMoveX, currentMoveY)
 		else:
 			self.uncoveredUnmarkedFrontier.add((currentMoveX, currentMoveY))
+
 
 		#self.printBoard()
 		#print(self.currentMove)
@@ -218,16 +215,18 @@ class MyAI( AI ):
 				action = self.beginBackTrackingSearch()
 				if action:
 					return action
-				if self.coveredTiles:
-					action = self.processRandomCoveredUnmarked()
-					if action:
-						return action
+				
+				action = self.processRandomCoveredUnmarked()
+				if action:
+					return action
+				
 				return self.processRandomCovered()
+				
 
 
-			#print(len(self.coveredTiles), self.startingMines)
-			if (len(self.coveredTiles) == self.startingMines):
-				return Action(AI.Action.LEAVE)
+
+			#if (self.remainingTiles == self.startingMines):
+			#	return Action(AI.Action.LEAVE)
 							
 			# By this point there are no known safe moves, apply rules to learn the safe tiles
 
@@ -236,7 +235,9 @@ class MyAI( AI ):
 			# Rule 2 (Hidden Mines): if effective label matches the number unmarked tiles then all uncovered are mines
 			
 			# backTrackingNeeded will be true if both functions reveal no new information about the board
-			backTrackingNeeded = self.revealSafe() and self.hiddenMines()
+			revealSafe = self.revealSafe() 
+			hiddenMines = self.hiddenMines()
+			backTrackingNeeded = revealSafe and hiddenMines
 
 
 	def beginBackTrackingSearch(self):
@@ -244,6 +245,7 @@ class MyAI( AI ):
 		# V tiles are uncovered
 		# C tiles are covered
 		V, C, effectiveLabels = self.getVCOrdering(maxTiles)
+		
 		n = len(C)
 
 		worldsWhereThisIsAMine = {}
@@ -267,7 +269,7 @@ class MyAI( AI ):
 		if leastThreatenedTileInAllWorlds:
 			moveX, moveY = leastThreatenedTileInAllWorlds
 			self.currentMove = (moveX, moveY)
-			self.remainingTiles -= 1
+			#self.remainingTiles -= 1
 			return Action(AI.Action.UNCOVER, moveX, moveY)
 		
 		return None
@@ -297,7 +299,7 @@ class MyAI( AI ):
 
 		possibleMines = C[i]
 		for _ in range(len(possibleMines)):
-			if possibleMines and self.changeIsValid(possibleMines[-1], effectiveLabels):
+			if self.changeIsValid(possibleMines[-1], effectiveLabels):
 				tryCurrentMine = possibleMines.pop()
 				currentDecisions.append(tryCurrentMine)
 				self.updateThreats(tryCurrentMine, -1, effectiveLabels)
@@ -312,14 +314,14 @@ class MyAI( AI ):
 		x, y = tryCurrentMine
 		for i in range(x - 1, x + 2):
 			for j in range(y - 1, y + 2):
-				if (i, j) in effectiveLabels:
+				if (i != x or j != y) and (i, j) in effectiveLabels:
 					effectiveLabels[(i, j)] += change
 
 	def changeIsValid(self, tryCurrentMine, effectiveLabels):
 		x, y = tryCurrentMine
 		for i in range(x - 1, x + 2):
 			for j in range(y - 1, y + 2):
-				if (i, j) in effectiveLabels and effectiveLabels[(i, j)] == 0:
+				if (i != x or j != y) and (i, j) in effectiveLabels and effectiveLabels[(i, j)] == 0:
 					return False
 		return True
 
@@ -332,6 +334,7 @@ class MyAI( AI ):
 		C = []
 
 		effectiveLabels = {}
+
 		for tile in self.uncoveredUnmarkedFrontier:
 			x, y = tile
 			safetyScore, adjacentCovered = self.getSafetyScoreAndAdjacentCovered(x, y)
@@ -345,7 +348,7 @@ class MyAI( AI ):
 			C.append(selectedTiles[i][2])
 			V.append(selectedTiles[i][0])
 			x, y = selectedTiles[i][0]
-			effectiveLabels[(x, y)] = self.board[x][y]
+			effectiveLabels[(x, y)] = self.board[y][x]
 
 		return V, C, effectiveLabels
 
@@ -356,12 +359,13 @@ class MyAI( AI ):
 		adjacentCoveredTiles = []
 		for i in range(x - 1, x + 2):
 			for j in range(y - 1, y + 2):
-				if self.inRange(i, j) and self.board[i][j] == COVERED_UNMARKED:
+				if (i != x or j != y) and self.inRange(j, i) and self.board[j][i] == COVERED_UNMARKED:
 					adjacentCoveredTiles.append((i, j))
 		return adjacentCoveredTiles
 
 	
 	def getSafetyScoreAndAdjacentCovered(self, x, y):
 		adjacentUncovered = self.getAdjacentCoveredFrontierTiles(x, y)
-		safetyScore = (9 - self.board[x][y]) + len(adjacentUncovered)
+		#safetyScore = (9 - self.board[y][x]) + len(adjacentUncovered)
+		safetyScore = 9 - self.board[y][x]
 		return safetyScore, adjacentUncovered
