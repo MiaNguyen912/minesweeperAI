@@ -24,7 +24,7 @@ labeled = [MINE, COVERED_UNMARKED, UNCOVERED]
 class MyAI( AI ):
 
 	def __init__(self, rowDimension, colDimension, totalMines, startX, startY):
-
+		self.calls = 0
 		# Constructor Initializations
 		self._rowDimension = rowDimension
 		self._colDimension = colDimension
@@ -89,12 +89,12 @@ class MyAI( AI ):
 		for Tile in self.uncoveredUnmarkedFrontier:
 			x, y = Tile
 			adjacentCoveredUnmarked = self.getAdjacentCoveredUnmarkedTiles(x, y)
-			safetyScore = (9 - self.board[y][x]) + len(adjacentCoveredUnmarked)
+			safetyScore = (9 - self.board[y][x]) #+ len(adjacentCoveredUnmarked)
 			if safetyScore > bestSafetyScore:
 				bestTiles = adjacentCoveredUnmarked
 				bestSafetyScore = safetyScore
 		if bestTiles:
-			return bestTiles.pop()
+			return random.choice(bestTiles)
 		return None
 
 
@@ -109,8 +109,17 @@ class MyAI( AI ):
 			return None
 	
 
-	# Random move
 	def processRandomCovered(self):
+		if not self.uncoveredUnmarkedFrontier:
+			return None
+		moveX, moveY = self.uncoveredUnmarkedFrontier.pop()
+		self.currentMove = (moveX, moveY)
+		return Action(AI.Action.UNCOVER, moveX, moveY)
+
+
+
+	# Random move
+	def processRandom(self):
 		moves = set()
 		for i in range(self._colDimension):
 			for j in range(self._rowDimension):
@@ -170,6 +179,7 @@ class MyAI( AI ):
 				self.uncoveredUnmarkedFrontier.remove((x, y))
 				return False
 
+
 		return True # No information was added
 			
 
@@ -220,7 +230,12 @@ class MyAI( AI ):
 				if action:
 					return action
 				
-				return self.processRandomCovered()
+				action = self.processRandomCovered()
+				if action:
+					return action
+				return self.processRandom()
+
+
 				
 
 
@@ -245,18 +260,17 @@ class MyAI( AI ):
 		# V tiles are uncovered
 		# C tiles are covered
 		V, C, effectiveLabels = self.getVCOrdering(maxTiles)
-		
+
 		n = len(C)
 
 		worldsWhereThisIsAMine = {}
-		for neighbor in C:
-			for possibleMine in neighbor:
-				x, y = possibleMine
+		for coveredTiles in C:
+			for coveredTile in coveredTiles:
+				x, y = coveredTile
 				worldsWhereThisIsAMine[(x, y)] = 0
 
 		currentDecisions = []
-
-		self.backTrackingSearch(V, C, effectiveLabels, n - 1, currentDecisions, worldsWhereThisIsAMine)
+		self.backTrackingSearch(0, V, C, effectiveLabels, n - 1, currentDecisions, worldsWhereThisIsAMine)
 
 		leastThreatenedTileThreat = float('inf')
 		leastThreatenedTileInAllWorlds = None
@@ -265,6 +279,7 @@ class MyAI( AI ):
 			if threat < leastThreatenedTileThreat:
 				leastThreatenedTileInAllWorlds = tile
 				leastThreatenedTileThreat = threat
+			
 
 		if leastThreatenedTileInAllWorlds:
 			moveX, moveY = leastThreatenedTileInAllWorlds
@@ -278,35 +293,34 @@ class MyAI( AI ):
 
 
 
-	def backTrackingSearch(self, V, C, effectiveLabels, i, currentDecisions, worldsWhereThisIsAMine):
-
+	def backTrackingSearch(self, startMine, V, C, effectiveLabels, i, currentDecisions, worldsWhereThisIsAMine, minesChosen):
 		if i == -1: # Constraint satisfied we found a world of possible mines
 			for decision in currentDecisions:
 				x, y = decision
 				worldsWhereThisIsAMine[(x, y)] += 1
 			return
 
-		x, y = (V[i][0], V[i][1])
-		currentTileEffectiveLabel = effectiveLabels[(x, y)]
+		x, y = (V[i][0], V[i][1]) # This is the current tile
+		currentTileLabel = effectiveLabels[(x, y)]
 
-		if currentTileEffectiveLabel < 0:
+		if currentTileLabel < 0:
 			return
-		
-		if currentTileEffectiveLabel == 0:
-			self.backTrackingSearch(V, C, effectiveLabels, i - 1, currentDecisions, worldsWhereThisIsAMine)
+
+		if currentTileLabel == 0:
+			self.backTrackingSearch(0, V, C, effectiveLabels, i - 1, currentDecisions, worldsWhereThisIsAMine)
 			return
-		
 
 		possibleMines = C[i]
-		for _ in range(len(possibleMines)):
-			if self.changeIsValid(possibleMines[-1], effectiveLabels):
-				tryCurrentMine = possibleMines.pop()
-				currentDecisions.append(tryCurrentMine)
-				self.updateThreats(tryCurrentMine, -1, effectiveLabels)
-				self.backTrackingSearch(V, C, effectiveLabels, i, currentDecisions, worldsWhereThisIsAMine)
-				self.updateThreats(tryCurrentMine, 1, effectiveLabels)	
+		n = len(possibleMines)
+		for currentMineIndex in range(startMine, n):
+			currentMine = C[i][currentMineIndex]
+			if  currentMine not in minesChosen and self.changeIsValid(currentMine, effectiveLabels):
+				currentDecisions.append(currentMine)
+				self.updateThreats(currentMine, -1, effectiveLabels)
+				self.backTrackingSearch(currentMineIndex + 1, V, C, effectiveLabels, i, currentDecisions, worldsWhereThisIsAMine)
+				self.updateThreats(currentMine, 1, effectiveLabels)
 				currentDecisions.pop()
-				possibleMines.insert(0, tryCurrentMine)
+
 
 
 
@@ -339,7 +353,7 @@ class MyAI( AI ):
 			x, y = tile
 			safetyScore, adjacentCovered = self.getSafetyScoreAndAdjacentCovered(x, y)
 			# coordinate, safety score, covered tiles adjacent
-			selectedTiles.append(((x, y), safetyScore, adjacentCovered))
+			selectedTiles.append(((x, y), safetyScore, adjacentCovered.copy()))
 		
 		selectedTiles = sorted(selectedTiles, key=lambda x:x[1] , reverse=True)
 		n = min(maxTiles, len(selectedTiles))
@@ -353,19 +367,9 @@ class MyAI( AI ):
 		return V, C, effectiveLabels
 
 
-		
-	
-	def getAdjacentCoveredFrontierTiles(self, x, y):
-		adjacentCoveredTiles = []
-		for i in range(x - 1, x + 2):
-			for j in range(y - 1, y + 2):
-				if (i != x or j != y) and self.inRange(j, i) and self.board[j][i] == COVERED_UNMARKED:
-					adjacentCoveredTiles.append((i, j))
-		return adjacentCoveredTiles
-
 	
 	def getSafetyScoreAndAdjacentCovered(self, x, y):
-		adjacentUncovered = self.getAdjacentCoveredFrontierTiles(x, y)
+		adjacentUncovered = self.getAdjacentCoveredUnmarkedTiles(x, y)
 		#safetyScore = (9 - self.board[y][x]) + len(adjacentUncovered)
 		safetyScore = 9 - self.board[y][x]
 		return safetyScore, adjacentUncovered
