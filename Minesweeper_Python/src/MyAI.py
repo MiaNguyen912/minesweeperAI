@@ -293,7 +293,7 @@ class MyAI( AI ):
 
 
 
-	def backTrackingSearch(self, startMine, V, C, effectiveLabels, i, currentDecisions, worldsWhereThisIsAMine, minesChosen):
+	def backTrackingSearch(self, startMine, V, C, effectiveLabels, i, currentDecisions, worldsWhereThisIsAMine):
 		if i == -1: # Constraint satisfied we found a world of possible mines
 			for decision in currentDecisions:
 				x, y = decision
@@ -314,7 +314,7 @@ class MyAI( AI ):
 		n = len(possibleMines)
 		for currentMineIndex in range(startMine, n):
 			currentMine = C[i][currentMineIndex]
-			if  currentMine not in minesChosen and self.changeIsValid(currentMine, effectiveLabels):
+			if  self.changeIsValid(currentMine, effectiveLabels):
 				currentDecisions.append(currentMine)
 				self.updateThreats(currentMine, -1, effectiveLabels)
 				self.backTrackingSearch(currentMineIndex + 1, V, C, effectiveLabels, i, currentDecisions, worldsWhereThisIsAMine)
